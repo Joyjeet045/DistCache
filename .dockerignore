@@ -1,0 +1,7 @@
+# Keep the Docker build context small and reproducible.
+.git
+.gitignore
+*.md
+deploy/
+data/
+**/*_test.go

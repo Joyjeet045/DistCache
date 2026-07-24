@@ -1,0 +1,16 @@
+# Build output
+/cache-server
+/cache-cli
+*.exe
+
+# Local persistence data
+/data/
+*.aof
+*.db
+
+# Go
+/vendor/
+
+# Editor
+.vscode/
+.idea/

@@ -1,0 +1,4 @@
+# This repository is implemented in Go and has no Python runtime dependencies.
+# Kept for environment consistency when tools expect requirements.txt.
+
+# No Python packages required.
