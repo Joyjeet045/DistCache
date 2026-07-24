@@ -1,0 +1,103 @@
+# Distributed cache cluster: one primary + two replicas, scraped by
+# Prometheus and visualized in Grafana.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# Client ports:   cache-1 -> localhost:6380, cache-2 -> 6381, cache-3 -> 6382
+# Metrics ports:  cache-1 -> localhost:9121, cache-2 -> 9122, cache-3 -> 9123
+# Prometheus:     localhost:9090
+# Grafana:        localhost:3000  (admin / admin)
+
+name: distcache
+
+x-cache-common: &cache-common
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  networks: [distcache]
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://localhost:9121/health"]
+    interval: 10s
+    timeout: 3s
+    retries: 5
+
+services:
+  cache-1:
+    <<: *cache-common
+    container_name: distcache-1
+    command:
+      - "-node-id=cache-1"
+      - "-addr=:6380"
+      - "-metrics-addr=:9121"
+      - "-repl-listen=:7000"
+      - "-data-dir=/data"
+      - "-policy=lru"
+      - "-cluster=cache-1=cache-1:6380,cache-2=cache-2:6380,cache-3=cache-3:6380"
+    ports:
+      - "6380:6380"
+      - "9121:9121"
+    volumes:
+      - cache1-data:/data
+
+  cache-2:
+    <<: *cache-common
+    container_name: distcache-2
+    depends_on: [cache-1]
+    command:
+      - "-node-id=cache-2"
+      - "-addr=:6380"
+      - "-metrics-addr=:9121"
+      - "-replicaof=cache-1:7000"
+      - "-cluster=cache-1=cache-1:6380,cache-2=cache-2:6380,cache-3=cache-3:6380"
+    ports:
+      - "6381:6380"
+      - "9122:9121"
+
+  cache-3:
+    <<: *cache-common
+    container_name: distcache-3
+    depends_on: [cache-1]
+    command:
+      - "-node-id=cache-3"
+      - "-addr=:6380"
+      - "-metrics-addr=:9121"
+      - "-replicaof=cache-1:7000"
+      - "-cluster=cache-1=cache-1:6380,cache-2=cache-2:6380,cache-3=cache-3:6380"
+    ports:
+      - "6382:6380"
+      - "9123:9121"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: distcache-prometheus
+    restart: unless-stopped
+    networks: [distcache]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on: [cache-1, cache-2, cache-3]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: distcache-grafana
+    restart: unless-stopped
+    networks: [distcache]
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+
+networks:
+  distcache:
+    driver: bridge
+
+volumes:
+  cache1-data:
