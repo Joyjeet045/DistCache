@@ -32,38 +32,26 @@ Prometheus/Grafana monitoring stack.
 
 ```mermaid
 flowchart TB
-    subgraph Clients
-        cli["cache-cli / redis-cli"]
-        sdk["Go SDK pkg/client"]
+    subgraph client[Clients]
+        cli[cache-cli / redis-cli]
+        sdk[Go SDK pkg/client]
     end
-    subgraph CacheNode["Cache Node"]
-        direction TB
-        resp["RESP TCP server"]
-        disp["Command dispatch"]
-        cacheeng["Sharded cache engine"]
-        aof[("AOF + Snapshots")]
-        repl["Replication primary"]
-        ps["Pub/Sub broker"]
-        lk["Lock manager"]
-        tx["Txn coordinator"]
-        metricshttp["/metrics HTTP"]
-        prom["Prometheus"]
+
+    subgraph node[Cache Node]
+        resp[RESP TCP server] --> disp
+        disp[Command dispatch] --> cacheeng[Sharded cache engine]
+        cacheeng -- ordered Event stream --> aof[(AOF + Snapshots)]
+        cacheeng -- ordered Event stream --> repl[Replication primary]
+        disp --> ps[Pub/Sub broker]
+        disp --> lk[Lock manager]
+        disp --> tx[Txn coordinator]
+        metrics[/metrics HTTP/] --> prom
     end
-    replica[("Replica nodes")]
-    graf["Grafana"]
 
     cli --> resp
     sdk --> resp
-    resp --> disp
-    disp --> cacheeng
-    cacheeng -- "ordered Event stream" --> aof
-    cacheeng -- "ordered Event stream" --> repl
-    disp --> ps
-    disp --> lk
-    disp --> tx
-    metricshttp --> prom
-    repl -- "snapshot + live events" --> replica
-    prom --> graf
+    repl -- snapshot + live events --> replica[(Replica nodes)]
+    prom[Prometheus] --> graf[Grafana]
 ```
 
 The cache engine emits a single **totally-ordered mutation event stream**. A
